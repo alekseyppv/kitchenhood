@@ -1,0 +1,184 @@
+esphome:
+  name: kitchenhood-hood
+  friendly_name: Kitchen Hood
+  comment: Управление вытяжкой (3 скорости + свет) на NodeMCU v3 (ESP8266)
+
+esp8266:
+  board: nodemcuv2
+
+logger:
+  baud_rate: 0
+
+api:
+ota:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "Kitchenhood Fallback"
+    password: !secret fallback_ap_password
+
+captive_portal:
+
+# -----------------------------
+# Реле (SSR)
+# -----------------------------
+switch:
+  - platform: gpio
+    id: relay_speed_1
+    name: "Вытяжка: скорость 1"
+    pin: GPIO5   # D1
+    restore_mode: ALWAYS_OFF
+    on_turn_on:
+      - switch.turn_off: relay_speed_2
+      - switch.turn_off: relay_speed_3
+
+  - platform: gpio
+    id: relay_speed_2
+    name: "Вытяжка: скорость 2"
+    pin: GPIO4   # D2
+    restore_mode: ALWAYS_OFF
+    on_turn_on:
+      - switch.turn_off: relay_speed_1
+      - switch.turn_off: relay_speed_3
+
+  - platform: gpio
+    id: relay_speed_3
+    name: "Вытяжка: скорость 3"
+    pin: GPIO14  # D5
+    restore_mode: ALWAYS_OFF
+    on_turn_on:
+      - switch.turn_off: relay_speed_1
+      - switch.turn_off: relay_speed_2
+
+  - platform: gpio
+    id: relay_light
+    name: "Вытяжка: свет"
+    pin: GPIO12  # D6
+    restore_mode: RESTORE_DEFAULT_OFF
+
+# -----------------------------
+# Скрипты управления скоростями
+# -----------------------------
+script:
+  - id: all_speeds_off
+    mode: queued
+    then:
+      - switch.turn_off: relay_speed_1
+      - switch.turn_off: relay_speed_2
+      - switch.turn_off: relay_speed_3
+
+  - id: set_speed_1
+    mode: queued
+    then:
+      - if:
+          condition:
+            switch.is_off: relay_speed_1
+          then:
+            - switch.turn_on: relay_speed_1
+
+  - id: set_speed_2
+    mode: queued
+    then:
+      - if:
+          condition:
+            switch.is_off: relay_speed_2
+          then:
+            - switch.turn_on: relay_speed_2
+
+  - id: set_speed_3
+    mode: queued
+    then:
+      - if:
+          condition:
+            switch.is_off: relay_speed_3
+          then:
+            - switch.turn_on: relay_speed_3
+
+# -----------------------------
+# Кнопка в Home Assistant
+# -----------------------------
+button:
+  - platform: template
+    name: "Вытяжка: выключить все режимы"
+    icon: mdi:fan-off
+    on_press:
+      - script.execute: all_speeds_off
+
+# -----------------------------
+# Физические кнопки (статус + действия)
+# -----------------------------
+binary_sensor:
+  - platform: gpio
+    id: btn_off
+    name: "Кнопка 1: выключить скорости"
+    pin:
+      number: GPIO13  # D7
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    filters:
+      - delayed_on: 15ms
+      - delayed_off: 15ms
+    on_press:
+      - script.execute: all_speeds_off
+
+  - platform: gpio
+    id: btn_speed_1
+    name: "Кнопка 2: скорость 1"
+    pin:
+      number: GPIO16  # D0
+      mode:
+        input: true
+      inverted: true
+    filters:
+      - delayed_on: 15ms
+      - delayed_off: 15ms
+    on_press:
+      - script.execute: set_speed_1
+
+  - platform: gpio
+    id: btn_speed_2
+    name: "Кнопка 3: скорость 2"
+    pin:
+      number: GPIO0   # D3
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    filters:
+      - delayed_on: 15ms
+      - delayed_off: 15ms
+    on_press:
+      - script.execute: set_speed_2
+
+  - platform: gpio
+    id: btn_speed_3
+    name: "Кнопка 4: скорость 3"
+    pin:
+      number: GPIO2   # D4
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    filters:
+      - delayed_on: 15ms
+      - delayed_off: 15ms
+    on_press:
+      - script.execute: set_speed_3
+
+  - platform: gpio
+    id: btn_light
+    name: "Кнопка 5: свет"
+    pin:
+      number: GPIO15  # D8
+      mode:
+        input: true
+      inverted: false
+    filters:
+      - delayed_on: 15ms
+      - delayed_off: 15ms
+    on_press:
+      - switch.toggle: relay_light
